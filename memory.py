@@ -2,9 +2,17 @@
 memory.py
 ---------
 Cognee CLOUD integration using cognee.serve() -- the managed CloudClient.
-This is the actual Cognee Cloud API surface (remember/recall/improve/forget),
+import os
+
+# Must be set BEFORE importing cognee
+os.environ.setdefault("COGNEE_SERVICE_URL", "https://tenant-81f70461-f8df-4863-9627-6edd07e08aca.aws.cognee.ai")
+
+import asyncio
+from typing import Any, Optional
+import cogneeThis is the actual Cognee Cloud API surface (remember/recall/improve/forget),
 not the self-hosted add()/cognify()/search() calls. Routes through Cognee
 Cloud's managed infra, so it does NOT need a separate OpenAI/Groq key.
+
 
 Required env vars (set as Codespaces secrets, never hardcoded):
     COGNEE_SERVICE_URL = https://api.cognee.ai
@@ -18,6 +26,9 @@ import os
 import asyncio
 from typing import Any, Optional
 
+import os
+os.environ.setdefault("COGNEE_API_KEY", os.environ.get("COGNEE_API_KEY", ""))
+os.environ.setdefault("COGNEE_SERVICE_URL", "https://tenant-81f70461-f8df-4863-9627-6edd07e08aca.aws.cognee.ai")
 import cognee
 
 POLICY_DATASET = "procurement_policies"
@@ -30,7 +41,7 @@ async def _get_client():
     """Lazily connect to Cognee Cloud once and reuse the client."""
     global _client
     if _client is None:
-        os.environ.setdefault("COGNEE_SERVICE_URL", "https://api.cognee.ai")
+        os.environ.setdefault("COGNEE_SERVICE_URL", "https://tenant-81f70461-f8df-4863-9627-6edd07e08aca.aws.cognee.ai")
         assert os.environ.get("COGNEE_API_KEY"), (
             "COGNEE_API_KEY not set. Add it as a Codespaces secret from "
             "https://platform.cognee.ai/sign-in"
