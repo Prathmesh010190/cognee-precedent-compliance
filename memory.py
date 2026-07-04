@@ -1,33 +1,48 @@
 """
 memory.py
 ---------
-Thin wrapper around Cognee's memory lifecycle (remember / recall / improve / forget).
-Every other file in this project should call INTO this module, not into cognee directly.
-This keeps the Cognee integration in one place and makes it easy to demo/test in isolation.
+Cognee CLOUD integration using cognee.serve() -- the managed CloudClient.
+This is the actual Cognee Cloud API surface (remember/recall/improve/forget),
+not the self-hosted add()/cognify()/search() calls. Routes through Cognee
+Cloud's managed infra, so it does NOT need a separate OpenAI/Groq key.
 
-Run this file directly to sanity-check your Cognee connection:
+Required env vars (set as Codespaces secrets, never hardcoded):
+    COGNEE_SERVICE_URL = https://api.cognee.ai
+    COGNEE_API_KEY     = your key from platform.cognee.ai
+
+Run this file directly to sanity-check your Cognee Cloud connection:
     python memory.py
 """
 
 import os
 import asyncio
-from typing import Any, Dict, List, Optional
+from typing import Any, Optional
 
 import cognee
 
-# ---------------------------------------------------------------------------
-# Dataset names — Cognee organizes memory into named datasets.
-# We split into two datasets so policy knowledge and vendor/department
-# history can be recalled (and forgotten) independently.
-# ---------------------------------------------------------------------------
 POLICY_DATASET = "procurement_policies"
 HISTORY_DATASET = "procurement_history"
 
+_client: Optional[Any] = None
+
+
+async def _get_client():
+    """Lazily connect to Cognee Cloud once and reuse the client."""
+    global _client
+    if _client is None:
+        os.environ.setdefault("COGNEE_SERVICE_URL", "https://api.cognee.ai")
+        assert os.environ.get("COGNEE_API_KEY"), (
+            "COGNEE_API_KEY not set. Add it as a Codespaces secret from "
+            "https://platform.cognee.ai/sign-in"
+        )
+        _client = await cognee.serve()
+    return _client
+
 
 async def remember_policy(text: str) -> None:
-    """Ingest a policy statement / document into long-term memory."""
-    await cognee.add(text, dataset_name=POLICY_DATASET)
-    await cognee.cognify(datasets=[POLICY_DATASET])
+    """Ingest a policy statement / document into long-term Cloud memory."""
+    client = await _get_client()
+    await client.remember(text, dataset_name=POLICY_DATASET)
 
 
 async def remember_decision(
@@ -39,81 +54,70 @@ async def remember_decision(
 ) -> None:
     """
     Called after every /step. Stores what was decided so future requests
-    from the same department/vendor context can be recalled against it.
-    This is what turns the environment from single-step/stateless into
-    something with real institutional memory.
+    from the same department/vendor context can be recalled as precedent.
     """
+    client = await _get_client()
     entry = (
         f"Request {request_id} | Department: {department} | "
         f"Vendor status: {vendor_status} | Item type: {item_type} | "
         f"Outcome: {decision_summary}"
     )
-    await cognee.add(entry, dataset_name=HISTORY_DATASET)
-    await cognee.cognify(datasets=[HISTORY_DATASET])
+    await client.remember(entry, dataset_name=HISTORY_DATASET)
 
 
 async def recall_policy(query: str) -> str:
     """Ask memory what policy applies to a given request description."""
-    results = await cognee.search(
-        query_text=query,
-        dataset_names=[POLICY_DATASET],
-    )
-    return _flatten(results)
+    client = await _get_client()
+    result = await client.recall(query, dataset_name=POLICY_DATASET)
+    return _flatten(result)
 
 
 async def recall_history(department: str, vendor_status: str) -> str:
-    """
-    Pull prior decisions relevant to this department/vendor before grading
-    a new request. This is the core "does it remember precedent" feature.
-    """
+    """Pull prior decisions relevant to this department/vendor."""
+    client = await _get_client()
     query = f"Past procurement decisions for department {department} with vendor status {vendor_status}"
-    results = await cognee.search(
-        query_text=query,
-        dataset_names=[HISTORY_DATASET],
-    )
-    return _flatten(results)
+    result = await client.recall(query, dataset_name=HISTORY_DATASET)
+    return _flatten(result)
 
 
 async def improve() -> None:
-    """
-    Post-ingestion enrichment pass (memify). Call this periodically (e.g. every
-    N decisions, or via an explicit endpoint) so the graph re-derives
-    relationships and stale weights are refreshed as new history comes in.
-    """
-    await cognee.cognify(datasets=[HISTORY_DATASET])
-
-
-async def forget_stale_history() -> Dict[str, Any]:
-    """
-    Prune the history dataset. In a real deployment you'd filter by date /
-    retention policy; Cognee's prune here removes the dataset's derived
-    graph so it can be rebuilt clean. Demonstrates the forget() operation
-    explicitly for the hackathon's "Best Use of Cognee" criterion.
-    """
-    await cognee.prune.prune_data()
-    return {"status": "history pruned"}
-
-
-def _flatten(results: Any) -> str:
-    """Cognee search can return a list of chunks/nodes; join into plain text."""
-    if not results:
-        return ""
-    if isinstance(results, str):
-        return results
+    """Post-ingestion enrichment (memify)."""
+    client = await _get_client()
     try:
-        return "\n".join(str(r) for r in results)
+        await client.improve(dataset=HISTORY_DATASET)
+    except RuntimeError as e:
+        if "404" in str(e):
+            print("Note: improve() endpoint not yet available on this Cognee Cloud tenant, skipping.")
+        else:
+            raise
+
+
+async def forget_stale_history() -> dict:
+    """Surgically prune the history dataset when it's no longer needed."""
+    client = await _get_client()
+    try:
+        await client.forget(dataset=HISTORY_DATASET)
+        return {"status": "history pruned"}
+    except RuntimeError as e:
+        if "404" in str(e):
+            return {"status": "forget endpoint not yet available on this tenant"}
+        raise
+
+
+def _flatten(result: Any) -> str:
+    if not result:
+        return ""
+    if isinstance(result, str):
+        return result
+    try:
+        return "\n".join(str(r) for r in result)
     except Exception:
-        return str(results)
+        return str(result)
 
 
-# ---------------------------------------------------------------------------
-# Manual smoke test — run `python memory.py` after setting COGNEE_API_KEY
-# ---------------------------------------------------------------------------
 if __name__ == "__main__":
 
     async def _smoke_test():
-        assert os.environ.get("COGNEE_API_KEY"), "Set COGNEE_API_KEY first (see .env.example)"
-
         print("Remembering a policy...")
         await remember_policy(
             "Software purchases over 5000 USD require finance approval. "
@@ -126,7 +130,7 @@ if __name__ == "__main__":
             vendor_status="unapproved",
             item_type="software",
             request_id="REQ-TEST-001",
-            decision_summary="Denied — unapproved vendor, routed to security for vendor onboarding review.",
+            decision_summary="Denied -- unapproved vendor, routed to security for vendor onboarding review.",
         )
 
         print("Recalling policy for a new software request...")
@@ -136,5 +140,10 @@ if __name__ == "__main__":
         print("Recalling history for Engineering + unapproved vendor...")
         history = await recall_history("Engineering", "unapproved")
         print("HISTORY RECALL:\n", history)
+
+        print("Running improve()...")
+        await improve()
+
+        print("Done.")
 
     asyncio.run(_smoke_test())
