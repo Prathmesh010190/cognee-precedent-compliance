@@ -1,0 +1,21 @@
+{
+  "name": "procurement-compliance-cognee",
+  "image": "mcr.microsoft.com/devcontainers/python:3.11",
+  "postCreateCommand": "pip install -r requirements.txt",
+  "forwardPorts": [7860],
+  "portsAttributes": {
+    "7860": {
+      "label": "Procurement Compliance API",
+      "onAutoForward": "notify"
+    }
+  },
+  "customizations": {
+    "vscode": {
+      "extensions": ["ms-python.python"]
+    }
+  },
+  "remoteEnv": {
+    "COGNEE_API_KEY": "${localEnv:COGNEE_API_KEY}",
+    "OPENAI_API_KEY": "${localEnv:OPENAI_API_KEY}"
+  }
+}
