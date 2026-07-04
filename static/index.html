@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Cognee Precedent Compliance</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<style>
+  :root {
+    --bg: #0f1115;
+    --panel: #171a21;
+    --border: #2a2f3a;
+    --text: #e6e8eb;
+    --muted: #9aa2af;
+    --accent: #6ea8fe;
+    --good: #4ade80;
+    --bad: #f87171;
+    --warn: #fbbf24;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    padding: 32px 20px 80px;
+  }
+  .wrap { max-width: 1000px; margin: 0 auto; }
+  h1 { font-size: 22px; margin-bottom: 4px; }
+  .sub { color: var(--muted); font-size: 14px; margin-bottom: 28px; }
+  .controls {
+    display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 24px;
+  }
+  select, button {
+    background: var(--panel);
+    color: var(--text);
+    border: 1px solid var(--border);
+    padding: 10px 14px;
+    border-radius: 8px;
+    font-size: 14px;
+    cursor: pointer;
+  }
+  button.primary { background: var(--accent); color: #0b0f16; border: none; font-weight: 600; }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+  @media (max-width: 800px) { .grid { grid-template-columns: 1fr; } }
+  .card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 18px 20px;
+  }
+  .card h2 {
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--muted);
+    margin: 0 0 14px;
+  }
+  .row { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px dashed var(--border); font-size: 14px; }
+  .row:last-child { border-bottom: none; }
+  .row .k { color: var(--muted); }
+  .row .v { text-align: right; max-width: 60%; }
+  .badge {
+    display: inline-block; padding: 3px 10px; border-radius: 999px; font-size: 12px; font-weight: 600;
+  }
+  .badge.approved { background: rgba(74,222,128,0.15); color: var(--good); }
+  .badge.denied { background: rgba(248,113,113,0.15); color: var(--bad); }
+  .badge.neutral { background: rgba(251,191,36,0.15); color: var(--warn); }
+  .memory-box {
+    background: #0b0d12;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px 16px;
+    font-size: 13px;
+    line-height: 1.6;
+    max-height: 340px;
+    overflow-y: auto;
+    white-space: pre-wrap;
+    color: #c9d1d9;
+  }
+  .memory-box mark {
+    background: rgba(110,168,254,0.25);
+    color: #cfe2ff;
+    padding: 0 3px;
+    border-radius: 3px;
+  }
+  .empty { color: var(--muted); font-size: 14px; padding: 20px 0; text-align: center; }
+  .loading { color: var(--accent); font-size: 14px; padding: 20px 0; text-align: center; }
+  .footer-note { color: var(--muted); font-size: 12px; margin-top: 28px; text-align: center; }
+  .pill-row { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
+  .pill { font-size: 12px; padding: 4px 10px; border-radius: 999px; border: 1px solid var(--border); color: var(--muted); }
+  .step-actions { display: flex; gap: 10px; margin-top: 16px; }
+  .score { font-size: 28px; font-weight: 700; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>🧠 Cognee Precedent Compliance</h1>
+  <div class="sub">Procurement compliance review powered by Cognee Cloud's persistent memory — every decision recalls precedent from every decision before it.</div>
+
+  <div class="controls">
+    <select id="taskSelect"><option value="">Loading tasks…</option></select>
+    <button id="resetBtn" class="primary">Load Request</button>
+    <button id="vendorHistoryBtn">🔍 Check Vendor Memory</button>
+  </div>
+
+  <div class="grid">
+    <div class="card" id="requestCard">
+      <h2>Incoming Request</h2>
+      <div class="empty">Click "Load Request" to pull a procurement scenario.</div>
+    </div>
+
+    <div class="card" id="memoryCard">
+      <h2>🧠 Cognee Recall — Policy &amp; Precedent</h2>
+      <div class="empty">Memory will appear here once a request is loaded.</div>
+    </div>
+  </div>
+
+  <div class="card" style="margin-top:18px;" id="decisionCard">
+    <h2>Submit Compliance Decision</h2>
+    <div class="empty">Load a request first.</div>
+  </div>
+
+  <div class="footer-note">Live demo — every call here hits real Cognee Cloud (remember / recall / improve / forget). Nothing is mocked.</div>
+</div>
+
+<script>
+const API = ""; // same-origin
+
+let currentTask = null;
+
+async function loadTasks() {
+  const res = await fetch(`${API}/tasks`);
+  const data = await res.json();
+  const sel = document.getElementById('taskSelect');
+  sel.innerHTML = data.task_ids.map(id => `<option value="${id}">${id}</option>`).join('');
+}
+
+function highlightPrecedent(text) {
+  if (!text) return '<span class="empty">No memory context returned.</span>';
+  // Highlight REQ-xxx style precedent lines so the recall is visually obvious
+  return text
+    .replace(/\\n/g, '\n')
+    .replace(/(REQ[-‑]\d+[^\n]*)/g, '<mark>$1</mark>')
+    .slice(0, 4000);
+}
+
+function badge(text, kind) {
+  return `<span class="badge ${kind}">${text}</span>`;
+}
+
+async function loadRequest() {
+  const taskId = document.getElementById('taskSelect').value;
+  document.getElementById('requestCard').innerHTML = '<h2>Incoming Request</h2><div class="loading">Loading…</div>';
+  document.getElementById('memoryCard').innerHTML = '<h2>🧠 Cognee Recall — Policy &amp; Precedent</h2><div class="loading">Querying Cognee Cloud… this can take 10–40s on first call.</div>';
+  document.getElementById('decisionCard').innerHTML = '<h2>Submit Compliance Decision</h2><div class="loading">Waiting on request…</div>';
+
+  const res = await fetch(`${API}/reset`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ task_id: taskId })
+  });
+  const obs = await res.json();
+  currentTask = obs;
+  renderRequest(obs);
+  renderMemory(obs);
+  renderDecisionForm(obs);
+}
+
+function renderRequest(obs) {
+  document.getElementById('requestCard').innerHTML = `
+    <h2>Incoming Request — ${obs.request_id}</h2>
+    <div class="pill-row">
+      <span class="pill">${obs.difficulty}</span>
+      <span class="pill">${obs.department}</span>
+      <span class="pill">${obs.item_type}</span>
+    </div>
+    <div class="row"><span class="k">Requestor</span><span class="v">${obs.requestor_role}</span></div>
+    <div class="row"><span class="k">Item</span><span class="v">${obs.item_description}</span></div>
+    <div class="row"><span class="k">Amount</span><span class="v">$${obs.amount_usd.toLocaleString()}</span></div>
+    <div class="row"><span class="k">Budget remaining</span><span class="v">$${obs.budget_remaining_usd.toLocaleString()}</span></div>
+    <div class="row"><span class="k">Vendor status</span><span class="v">${obs.vendor_status}</span></div>
+    <div class="row"><span class="k">Manager approval</span><span class="v">${obs.manager_approval ? '✅' : '❌'}</span></div>
+    <div class="row"><span class="k">Finance approval</span><span class="v">${obs.finance_approval ? '✅' : '❌'}</span></div>
+    <div class="row"><span class="k">Security review</span><span class="v">${obs.security_review ? '✅' : '❌'}</span></div>
+    <div class="row"><span class="k">Policy notes</span><span class="v">${obs.policy_notes}</span></div>
+  `;
+}
+
+function renderMemory(obs) {
+  document.getElementById('memoryCard').innerHTML = `
+    <h2>🧠 Cognee Recall — Policy &amp; Precedent</h2>
+    <div class="memory-box">${highlightPrecedent(obs.memory_context)}</div>
+  `;
+}
+
+function renderDecisionForm(obs) {
+  document.getElementById('decisionCard').innerHTML = `
+    <h2>Submit Compliance Decision</h2>
+    <div class="grid">
+      <div>
+        <div class="row"><span class="k">Policy compliance</span></div>
+        <select id="policy_compliance" style="width:100%">
+          <option value="compliant">compliant</option>
+          <option value="non_compliant">non_compliant</option>
+        </select>
+      </div>
+      <div>
+        <div class="row"><span class="k">Approval decision</span></div>
+        <select id="approval_decision" style="width:100%">
+          <option value="approved">approved</option>
+          <option value="denied">denied</option>
+          <option value="escalated">escalated</option>
+        </select>
+      </div>
+      <div>
+        <div class="row"><span class="k">Risk level</span></div>
+        <select id="risk_level" style="width:100%">
+          <option value="low">low</option>
+          <option value="medium">medium</option>
+          <option value="high">high</option>
+        </select>
+      </div>
+    </div>
+    <div class="step-actions">
+      <button class="primary" id="submitDecisionBtn">Submit Decision</button>
+    </div>
+    <div id="decisionResult"></div>
+  `;
+  document.getElementById('submitDecisionBtn').onclick = submitDecision;
+}
+
+async function submitDecision() {
+  const btn = document.getElementById('submitDecisionBtn');
+  btn.disabled = true;
+  btn.textContent = 'Submitting… (Cognee is remembering this)';
+
+  const body = {
+    policy_compliance: document.getElementById('policy_compliance').value,
+    approval_decision: document.getElementById('approval_decision').value,
+    risk_level: document.getElementById('risk_level').value,
+    route_to: [],
+    missing_requirements: []
+  };
+
+  const res = await fetch(`${API}/step`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body)
+  });
+  const obs = await res.json();
+
+  const kind = obs.reward > 0.5 ? 'approved' : 'neutral';
+  document.getElementById('decisionResult').innerHTML = `
+    <div class="row"><span class="k">Score</span><span class="v score">${(obs.reward*100).toFixed(0)}%</span></div>
+    <div class="row"><span class="k">Result</span><span class="v">${badge(obs.message, kind)}</span></div>
+    <div class="empty">This outcome has now been remembered by Cognee. Load the same task again and check "Vendor Memory" to see it recalled as precedent.</div>
+  `;
+  btn.disabled = false;
+  btn.textContent = 'Submit Decision';
+}
+
+async function checkVendorHistory() {
+  if (!currentTask) {
+    alert('Load a request first.');
+    return;
+  }
+  const dept = currentTask.department;
+  const vendorStatus = currentTask.vendor_status;
+  document.getElementById('memoryCard').innerHTML = '<h2>🧠 Cognee Recall — Vendor Memory</h2><div class="loading">Querying Cognee Cloud…</div>';
+
+  const res = await fetch(`${API}/memory/vendor-history?department=${encodeURIComponent(dept)}&vendor_status=${encodeURIComponent(vendorStatus)}`);
+  const data = await res.json();
+
+  document.getElementById('memoryCard').innerHTML = `
+    <h2>🧠 Cognee Recall — Vendor Memory (${dept} / ${vendorStatus})</h2>
+    <div class="memory-box">${highlightPrecedent(data.recalled_history)}</div>
+  `;
+}
+
+document.getElementById('resetBtn').onclick = loadRequest;
+document.getElementById('vendorHistoryBtn').onclick = checkVendorHistory;
+
+loadTasks();
+</script>
+</body>
+</html>
