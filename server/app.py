@@ -61,9 +61,9 @@ def list_tasks():
 
 
 @app.post("/reset")
-def reset(request: ResetRequest = None):
+async def reset(request: ResetRequest = None):
     try:
-        obs = env.reset(
+        obs = await env.reset(
             seed=request.seed if request else None,
             episode_id=request.episode_id if request else None,
             task_id=request.task_id if request else None,
@@ -74,9 +74,9 @@ def reset(request: ResetRequest = None):
 
 
 @app.post("/step")
-def step(action: ProcurementAction):
+async def step(action: ProcurementAction):
     try:
-        obs = env.step(action)
+        obs = await env.step(action)
         return obs.model_dump()
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))

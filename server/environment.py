@@ -34,7 +34,7 @@ class ProcurementComplianceEnvironment:
         """Return all available task IDs."""
         return [task["id"] for task in self.tasks]
 
-    def reset(self, seed=None, episode_id=None, task_id=None, **kwargs) -> ProcurementObservation:
+    async def reset(self, seed=None, episode_id=None, task_id=None, **kwargs) -> ProcurementObservation:
         if seed is not None:
             random.seed(seed)
 
@@ -69,9 +69,10 @@ class ProcurementComplianceEnvironment:
         # This is what makes decisions precedent-aware instead of single-shot.
         # Falls back silently to "" if Cognee isn't configured yet, so the
         # environment still works with zero API keys set (useful for local dev).
-        memory_context = self._safe_run(
-            self._gather_memory_context(request)
-        )
+        try:
+            memory_context = await self._gather_memory_context(request)
+        except Exception as e:
+            memory_context = f"(memory unavailable: {e})"
 
         return ProcurementObservation(
             done=False,
@@ -107,15 +108,9 @@ class ProcurementComplianceEnvironment:
             parts.append(f"[Recalled history]\n{history}")
         return "\n\n".join(parts)
 
-    @staticmethod
-    def _safe_run(coro) -> str:
-        """Run an async Cognee call from sync FastAPI code; never crash the request on memory errors."""
-        try:
-            return asyncio.run(coro)
-        except Exception as e:
-            return f"(memory unavailable: {e})"
 
-    def step(self, action: ProcurementAction, timeout_s=None, **kwargs) -> ProcurementObservation:
+
+    async def step(self, action: ProcurementAction, timeout_s=None, **kwargs) -> ProcurementObservation:
         if self.current_task is None:
             raise ValueError("Environment has not been reset. Call reset() first.")
 
@@ -144,15 +139,16 @@ class ProcurementComplianceEnvironment:
             f"approval_decision={action.approval_decision}, "
             f"risk_level={action.risk_level}, score={reward:.2f}"
         )
-        self._safe_run(
-            cognee_memory.remember_decision(
+        try:
+            await cognee_memory.remember_decision(
                 department=request["department"],
                 vendor_status=request["vendor_status"],
                 item_type=request["item_type"],
                 request_id=request["request_id"],
                 decision_summary=decision_summary,
             )
-        )
+        except Exception as e:
+            print(f"[step] memory remember failed (non-fatal): {e}")
 
         return ProcurementObservation(
             done=True,
