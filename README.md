@@ -19,6 +19,8 @@ tags:
 
 **An AI procurement compliance reviewer that never forgets.** Built on [Cognee Cloud](https://platform.cognee.ai)'s hybrid graph-vector memory layer, this environment gives a compliance-review agent persistent, precedent-aware memory — so every new decision is informed by everything that came before it, not evaluated in isolation.
 
+🔗 **Live demo:** [prathmesh1243-cognee-precedent-compliance.hf.space](https://prathmesh1243-cognee-precedent-compliance.hf.space)
+
 Built for the [WeMakeDevs × Cognee "The Hangover Part AI" Hackathon](https://www.wemakedevs.org/hackathons/cognee).
 
 ---
@@ -52,6 +54,21 @@ New request comes in
 
 ---
 
+## Live Frontend
+
+A working browser UI ships alongside the API, served directly from the same FastAPI app (`server/app.py` → `static/index.html`) — no separate frontend deployment or build step required.
+
+**What it shows, end to end:**
+
+- **Load Request** — pulls a procurement scenario (item, amount, budget, vendor status, policy notes) into a clean review card
+- **Cognee Recall panel** — displays the live policy text and precedent history Cognee's `recall()` surfaces for that department/vendor, including a generated immediate-action checklist
+- **Check Vendor Memory** — queries `/memory/vendor-history` directly, so you can see recalled precedent change *before* and *after* a decision is submitted
+- **Submit Compliance Decision** — posts the reviewer's judgment to `/step`, which grades it and writes the outcome back into Cognee via `remember()`
+
+This turns the "it remembers" behavior from a curl-command demo into something a judge can click through themselves in the browser.
+
+---
+
 ## How Cognee Powers This
 
 | Operation | What it does here |
@@ -59,7 +76,7 @@ New request comes in
 | **`remember()`** | Ingests procurement policy documents and every past compliance decision (department, vendor status, item type, outcome) into Cognee's knowledge graph. |
 | **`recall()`** | Before grading a new request, queries Cognee for (1) the relevant policy text and (2) prior decisions involving the same department/vendor — surfaced via Cognee's hybrid graph + vector search. |
 | **`improve()`** | Re-derives graph relationships and enriches the memory as new decisions accumulate, so precedent gets sharper over time. |
-| **`forget()`** | Surgically prunes stale history datasets — modeling real data-retention requirements in enterprise compliance systems. |
+| **`forget()`** | Prunes stale history datasets — modeling real data-retention requirements in enterprise compliance systems. |
 
 All four operations run against **Cognee Cloud** (not a local/self-hosted instance), connected via `cognee.serve()` and the managed CloudClient API.
 
@@ -71,7 +88,7 @@ All four operations run against **Cognee Cloud** (not a local/self-hosted instan
 2. `remember()` stores that outcome.
 3. A second request from the **same department and vendor status** comes in later. This time, `recall()` surfaces the first denial as precedent *before* the agent even sees the new request — informing the decision instead of starting from scratch.
 
-This is the core behavior a stateless LLM call cannot replicate on its own.
+This is the core behavior a stateless LLM call cannot replicate on its own. You can watch this happen live in the frontend by using **Check Vendor Memory** before and after submitting a decision.
 
 ---
 
@@ -79,7 +96,8 @@ This is the core behavior a stateless LLM call cannot replicate on its own.
 
 | Endpoint | Method | Description |
 |---|---|---|
-| `/` | GET | Service info |
+| `/` | GET | Serves the frontend UI |
+| `/api` | GET | Service info |
 | `/health` | GET | Health check |
 | `/tasks` | GET | List all available task IDs |
 | `/reset` | POST | Start a new review episode; recalls policy + precedent for the request |
@@ -115,13 +133,15 @@ curl "https://prathmesh1243-cognee-precedent-compliance.hf.space/memory/vendor-h
 
 ```
 ├── memory.py              # Cognee Cloud integration (remember/recall/improve/forget)
-├── models.py               # Pydantic schemas for requests/observations/state
-├── data/tasks.json         # Procurement request scenarios + expected grading output
+├── models.py              # Pydantic schemas for requests/observations/state
+├── data/tasks.json        # Procurement request scenarios + expected grading output
 ├── server/
-│   ├── app.py               # FastAPI routes, including /memory/* endpoints
-│   └── environment.py       # Core grading logic + Cognee recall/remember wiring
-├── Dockerfile               # HF Spaces / container deployment
-└── .devcontainer/           # GitHub Codespaces configuration
+│   ├── app.py             # FastAPI routes, static frontend mount, and /memory/* endpoints
+│   └── environment.py     # Core grading logic + Cognee recall/remember wiring
+├── static/
+│   └── index.html         # Frontend UI — request review, Cognee recall panel, decision form
+├── Dockerfile              # HF Spaces / container deployment
+└── .devcontainer/          # GitHub Codespaces configuration
 ```
 
 The grading logic itself is a deterministic, weighted-partial-credit grader that scores five dimensions of a compliance decision (policy compliance, approval decision, risk level, routing, and missing requirements) against expected outputs, with difficulty-based scoring adjustments.
@@ -131,7 +151,8 @@ The grading logic itself is a deterministic, weighted-partial-credit grader that
 ## Tech Stack
 
 - **Cognee Cloud** — hybrid graph-vector memory layer (the core of this project)
-- **FastAPI** — REST API server
+- **FastAPI** — REST API server and frontend host
+- **HTML/CSS/JS** — lightweight, dependency-free frontend served as a static file
 - **Pydantic** — request/response schema validation
 - **Docker** — containerized deployment on Hugging Face Spaces
 - **GitHub Codespaces** — development environment
@@ -151,7 +172,7 @@ export COGNEE_SERVICE_URL="your_tenant_url_from_the_api_keys_page"
 uvicorn server.app:app --host 0.0.0.0 --port 7860
 ```
 
-On startup, the server automatically seeds all policy notes from `data/tasks.json` into Cognee.
+On startup, the server automatically seeds all policy notes from `data/tasks.json` into Cognee. Once running, open `http://localhost:7860` in a browser to use the frontend directly.
 
 ---
 
