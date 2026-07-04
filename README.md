@@ -161,6 +161,15 @@ This pattern — precedent-aware decision-making backed by persistent memory —
 
 ---
 
+### Proof — Live Recall in Production
+
+A real response from the deployed Cognee Cloud API. On a second `/reset` call for the same department, Cognee's `recall()` automatically surfaced the outcome of an earlier decision as precedent — no hardcoded lookup, no manual logic:
+
+> **"REQ-001 | Approved | Software | Approved (policy-compliant) | Low risk, risk score 0.90"**
+> — recalled from Cognee's knowledge graph on a fresh `/reset` call, referencing a decision made in an earlier `/step`
+
+This is the exact capability a stateless LLM call cannot replicate — the agent reasons with institutional memory instead of evaluating each request from zero.
+
 ## Acknowledgments
 
 Built for the WeMakeDevs × Cognee hackathon. Thanks to the Cognee team for the memory API and Cognee Cloud infrastructure this project runs on.
