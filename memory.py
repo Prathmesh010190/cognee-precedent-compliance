@@ -13,6 +13,8 @@ HISTORY_DATASET = "procurement_history"
 
 RECALL_TIMEOUT_SECONDS = 20.0
 
+CLIENT_INIT_TIMEOUT_SECONDS = 20.0
+
 _client = None
 
 
@@ -23,7 +25,13 @@ async def _get_client():
             "COGNEE_API_KEY not set. Add it as a Codespaces secret from "
             "https://platform.cognee.ai/sign-in"
         )
-        _client = await cognee.serve()
+        try:
+            _client = await asyncio.wait_for(cognee.serve(), timeout=CLIENT_INIT_TIMEOUT_SECONDS)
+        except asyncio.TimeoutError:
+            raise RuntimeError(
+                f"cognee.serve() did not respond within {CLIENT_INIT_TIMEOUT_SECONDS}s -- "
+                "check COGNEE_API_KEY / COGNEE_SERVICE_URL and Cognee Cloud status."
+            )
     return _client
 
 
