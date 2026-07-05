@@ -11,9 +11,9 @@ import cognee
 POLICY_DATASET = "procurement_policies"
 HISTORY_DATASET = "procurement_history"
 
-RECALL_TIMEOUT_SECONDS = 90.0
+RECALL_TIMEOUT_SECONDS = 20.0
 
-CLIENT_INIT_TIMEOUT_SECONDS = 90.0
+CLIENT_INIT_TIMEOUT_SECONDS = 20.0
 
 _client = None
 
@@ -58,7 +58,7 @@ async def recall_policy(query: str) -> str:
             timeout=RECALL_TIMEOUT_SECONDS,
         )
     except asyncio.TimeoutError:
-        return "(policy recall timed out after 20s -- Cognee may be slow to respond right now)"
+        return f"(policy recall timed out after {RECALL_TIMEOUT_SECONDS:.0f}s -- Cognee may be slow to respond right now)"
     return _flatten(result)
 
 
@@ -71,7 +71,7 @@ async def recall_history(department: str, vendor_status: str) -> str:
             timeout=RECALL_TIMEOUT_SECONDS,
         )
     except asyncio.TimeoutError:
-        return "(history recall timed out after 20s -- Cognee may be slow to respond right now)"
+        return f"(history recall timed out after {RECALL_TIMEOUT_SECONDS:.0f}s -- Cognee may be slow to respond right now)"
     return _flatten(result)
 
 
