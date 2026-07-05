@@ -11,6 +11,8 @@ import cognee
 POLICY_DATASET = "procurement_policies"
 HISTORY_DATASET = "procurement_history"
 
+RECALL_TIMEOUT_SECONDS = 20.0
+
 _client = None
 
 
@@ -42,14 +44,26 @@ async def remember_decision(department, vendor_status, item_type, request_id, de
 
 async def recall_policy(query: str) -> str:
     client = await _get_client()
-    result = await client.recall(query, dataset_name=POLICY_DATASET)
+    try:
+        result = await asyncio.wait_for(
+            client.recall(query, dataset_name=POLICY_DATASET),
+            timeout=RECALL_TIMEOUT_SECONDS,
+        )
+    except asyncio.TimeoutError:
+        return "(policy recall timed out after 20s -- Cognee may be slow to respond right now)"
     return _flatten(result)
 
 
 async def recall_history(department: str, vendor_status: str) -> str:
     client = await _get_client()
     query = f"Past procurement decisions for department {department} with vendor status {vendor_status}"
-    result = await client.recall(query, dataset_name=HISTORY_DATASET)
+    try:
+        result = await asyncio.wait_for(
+            client.recall(query, dataset_name=HISTORY_DATASET),
+            timeout=RECALL_TIMEOUT_SECONDS,
+        )
+    except asyncio.TimeoutError:
+        return "(history recall timed out after 20s -- Cognee may be slow to respond right now)"
     return _flatten(result)
 
 
