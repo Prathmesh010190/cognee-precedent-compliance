@@ -11,9 +11,9 @@ import cognee
 POLICY_DATASET = "procurement_policies"
 HISTORY_DATASET = "procurement_history"
 
-RECALL_TIMEOUT_SECONDS = 20.0
+RECALL_TIMEOUT_SECONDS = 90.0
 
-CLIENT_INIT_TIMEOUT_SECONDS = 20.0
+CLIENT_INIT_TIMEOUT_SECONDS = 90.0
 
 _client = None
 
